@@ -57,25 +57,31 @@ export class SpeechRecognizer {
         };
 
         recognition.onerror = (event: any) => {
-          if (event.error === 'no-speech') {
-            // Normal silence; do not treat as fatal error
+          if (event.error === 'no-speech' || event.error === 'aborted') {
             return;
           }
-          if (event.error === 'aborted') {
+          if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+            this.shouldRestart = false;
+            this.callbacks.onError?.('Microphone speech recognition permission denied.');
             return;
           }
-          this.callbacks.onError?.(`Speech recognition error: ${event.error}`);
+          this.callbacks.onError?.(`Speech recognition notice: ${event.error}`);
         };
 
         recognition.onend = () => {
           this.isListening = false;
-          // Auto-restart if session is still supposed to be active
+          // Auto-restart with debounce if session is still supposed to be active
           if (this.shouldRestart) {
-            try {
-              recognition.start();
-            } catch {
-              // ignore
-            }
+            setTimeout(() => {
+              if (this.shouldRestart && !this.isListening) {
+                try {
+                  recognition.start();
+                  this.isListening = true;
+                } catch {
+                  // ignore
+                }
+              }
+            }, 300);
           }
         };
 
@@ -91,12 +97,16 @@ export class SpeechRecognizer {
   }
 
   start(): void {
-    if (!this.recognition || this.isListening) return;
+    if (!this.recognition) return;
     this.shouldRestart = true;
+    if (this.isListening) return;
     try {
       this.recognition.start();
-    } catch {
-      // ignore if already started
+      this.isListening = true;
+    } catch (e: any) {
+      if (e?.name === 'InvalidStateError') {
+        this.isListening = true;
+      }
     }
   }
 

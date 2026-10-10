@@ -15,12 +15,14 @@ export class TurnScheduler {
   private activeGenerationEpoch = 0;
   private onScheduleSpeaker: (speakerId: string, speakerLabel: string) => Promise<void>;
 
-  // GD turn queue management
+  // GD turn queue management: candidate is integrated into round-robin turns
   private candidateQueue: Array<{ id: string; label: string }> = [
     { id: 'agent_a', label: 'Priya Sharma' },
     { id: 'agent_b', label: 'Rohan Mehta' },
+    { id: 'student', label: 'Candidate' },
     { id: 'agent_c', label: 'Ananya Iyer' },
     { id: 'agent_d', label: 'Vikram Patel' },
+    { id: 'student', label: 'Candidate' },
   ];
   private nextCandidateIndex = 0;
   private isClosing = false;

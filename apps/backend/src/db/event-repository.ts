@@ -151,6 +151,17 @@ export class EventRepository {
     return this.mapRowToEvent(row);
   }
 
+  getRecentTranscriptEvents(sessionId: string, limit: number = 4): SessionEvent[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM session_events
+      WHERE session_id = ? AND text IS NOT NULL AND trim(text) != ''
+      ORDER BY sequence DESC
+      LIMIT ?
+    `);
+    const rows = stmt.all(sessionId, limit) as Record<string, unknown>[];
+    return rows.reverse().map((r) => this.mapRowToEvent(r));
+  }
+
   private mapRowToEvent(row: Record<string, unknown>): SessionEvent {
     let metadata: Record<string, unknown> = {};
     try {

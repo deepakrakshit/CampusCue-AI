@@ -79,7 +79,11 @@ export class AudioCapture {
       };
 
       this.source.connect(this.processor);
-      this.processor.connect(this.audioContext.destination);
+      // Route through silence gain node to keep ScriptProcessor active without looping mic audio to speakers
+      const silenceGain = this.audioContext.createGain();
+      silenceGain.gain.value = 0;
+      this.processor.connect(silenceGain);
+      silenceGain.connect(this.audioContext.destination);
       this.isRecording = true;
     } catch (err) {
       this.stop();

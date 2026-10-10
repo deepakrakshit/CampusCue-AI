@@ -32,7 +32,11 @@ export class SessionOrchestrator {
   private isDestroyed = false;
   private isMockMode = false;
   private timerHandle: NodeJS.Timeout | null = null;
+  private studentTurnTimerHandle: NodeJS.Timeout | null = null;
+  private aiTurnTimerHandle: NodeJS.Timeout | null = null;
   private chunkSequence = 0;
+  private currentTurnAudioBytes = 0;
+  private currentTurnStartTime = 0;
 
   constructor(sessionId: string, db?: DatabaseSync) {
     this.sessionId = sessionId;
@@ -172,6 +176,9 @@ export class SessionOrchestrator {
           activeSpeaker === speakerId &&
           currentTurnId
         ) {
+          const chunkBytes = Buffer.from(audioBase64, 'base64').length;
+          this.currentTurnAudioBytes += chunkBytes;
+
           this.chunkSequence++;
           this.broadcast({
             type: 'audio.chunk',
@@ -306,8 +313,76 @@ export class SessionOrchestrator {
     const turnId = randomUUID();
     const epoch = session.generation_epoch;
 
+    if (speakerId === 'student') {
+      // Formally yield floor to the candidate in discussion flow
+      this.scheduler.handleStudentBargeIn(epoch);
+      this.sessionRepo.updateSpeakerLock(this.sessionId, 'student-speaking', 'student');
+
+      const inviteText = `Candidate, we would love to hear your thoughts on this. The floor is yours, please go ahead!`;
+      const modEvent = this.eventRepo.appendEvent({
+        sessionId: this.sessionId,
+        kind: 'moderator',
+        speakerId: 'moderator',
+        speakerLabel: 'Mr. S. Rao (Moderator)',
+        text: inviteText,
+      });
+
+      this.broadcast({
+        type: 'transcript.final',
+        event: modEvent,
+      });
+
+      this.broadcast({
+        type: 'speaker.turn_started',
+        speakerId: 'student',
+        speakerLabel: 'Candidate',
+        turnId,
+        generationEpoch: epoch,
+      });
+
+      this.broadcast({
+        type: 'session.state_changed',
+        status: 'running',
+        speakerLock: 'student-speaking',
+        activeSpeakerId: 'student',
+        generationEpoch: epoch,
+      });
+
+      // Synchronize moderator invite to background agents
+      await this.syncContextToAllAgents({ role: 'user', text: `[Moderator]: ${inviteText}` });
+
+      // Student turn window timer (25 seconds). If candidate does not speak, move to next turn
+      if (this.studentTurnTimerHandle) {
+        clearTimeout(this.studentTurnTimerHandle);
+      }
+      this.studentTurnTimerHandle = setTimeout(() => {
+        const freshSession = this.sessionRepo.getSessionById(this.sessionId);
+        if (freshSession?.speaker_lock === 'student-speaking' && this.scheduler.getActiveSpeakerId() === 'student') {
+          this.scheduler.releaseLock();
+          this.sessionRepo.updateSpeakerLock(this.sessionId, 'idle', null);
+          this.broadcast({
+            type: 'session.state_changed',
+            status: 'running',
+            speakerLock: 'idle',
+            activeSpeakerId: null,
+            generationEpoch: epoch,
+          });
+          setTimeout(() => {
+            if (this.scheduler.getSpeakerLock() === 'idle') {
+              this.scheduler.triggerNextTurn();
+            }
+          }, 1000);
+        }
+      }, 25000);
+
+      return;
+    }
+
     const lockAcquired = this.scheduler.acquireAiLock(speakerId, speakerLabel, turnId, epoch);
     if (!lockAcquired) return;
+
+    this.currentTurnAudioBytes = 0;
+    this.currentTurnStartTime = Date.now();
 
     this.sessionRepo.updateSpeakerLock(this.sessionId, 'ai-speaking', speakerId);
 
@@ -330,11 +405,21 @@ export class SessionOrchestrator {
     const provider = this.providers.get(speakerId);
     if (provider) {
       try {
-        const lastEvent = this.eventRepo.getLastEvent(this.sessionId);
+        const recentEvents = this.eventRepo.getRecentTranscriptEvents(this.sessionId, 4);
         let contextualGuidance = '';
-        if (lastEvent && lastEvent.text && lastEvent.speakerId !== speakerId) {
-          const speakerName = lastEvent.speakerId === 'student' ? 'the Candidate' : lastEvent.speakerLabel;
-          contextualGuidance = `\nCRITICAL CONTEXT: ${speakerName} just contributed: "${lastEvent.text}". In your opening sentence, you MUST directly address, react to, build upon, or politely challenge ${speakerName}'s point! Never ignore what was just said.`;
+        if (recentEvents.length > 0) {
+          const flowLines = recentEvents
+            .map((e) => {
+              const name = e.speakerId === 'student' ? 'Candidate' : e.speakerLabel;
+              return `- [${name}]: "${e.text}"`;
+            })
+            .join('\n');
+
+          const lastSpeakerEvent = recentEvents[recentEvents.length - 1];
+          const lastSpeakerName =
+            lastSpeakerEvent.speakerId === 'student' ? 'Candidate' : lastSpeakerEvent.speakerLabel;
+
+          contextualGuidance = `\nRecent group discussion flow:\n${flowLines}\n\nCRITICAL CONTEXT: In your opening sentence, you MUST directly address or react to what was just spoken, especially acknowledging ${lastSpeakerName}'s point. Build upon their point or politely challenge it with your perspective. Never ignore the previous speaker!`;
         }
 
         const promptText =
@@ -395,6 +480,15 @@ export class SessionOrchestrator {
    * Student barge-in: immediately cancel AI generation and lock to student
    */
   async handleStudentBargeIn(): Promise<void> {
+    if (this.aiTurnTimerHandle) {
+      clearTimeout(this.aiTurnTimerHandle);
+      this.aiTurnTimerHandle = null;
+    }
+    if (this.studentTurnTimerHandle) {
+      clearTimeout(this.studentTurnTimerHandle);
+      this.studentTurnTimerHandle = null;
+    }
+
     const newEpoch = this.sessionRepo.incrementGenerationEpoch(this.sessionId);
     const { interruptedSpeakerId, wasAiSpeaking } = this.scheduler.handleStudentBargeIn(newEpoch);
 
@@ -441,6 +535,15 @@ export class SessionOrchestrator {
    * Student speech completed: append to canonical transcript and synchronize context
    */
   async handleStudentSpeechStopped(text: string): Promise<void> {
+    if (this.studentTurnTimerHandle) {
+      clearTimeout(this.studentTurnTimerHandle);
+      this.studentTurnTimerHandle = null;
+    }
+    if (this.aiTurnTimerHandle) {
+      clearTimeout(this.aiTurnTimerHandle);
+      this.aiTurnTimerHandle = null;
+    }
+
     if (!text || text.trim().length === 0) {
       this.scheduler.releaseLock();
       this.sessionRepo.updateSpeakerLock(this.sessionId, 'idle', null);
@@ -505,13 +608,6 @@ export class SessionOrchestrator {
   ): Promise<void> {
     const turnId = this.scheduler.getCurrentTurnId();
 
-    this.broadcast({
-      type: 'speaker.turn_completed',
-      speakerId,
-      turnId: turnId || '',
-      text,
-    });
-
     if (text && text.trim().length > 0) {
       const event = this.eventRepo.appendEvent({
         sessionId: this.sessionId,
@@ -539,21 +635,53 @@ export class SessionOrchestrator {
       }
     }
 
-    this.scheduler.releaseLock();
-    this.sessionRepo.updateSpeakerLock(this.sessionId, 'idle', null);
+    // Audio Playback Synchronization:
+    // Gemini 3.8 Live audio format is 24kHz 16-bit mono PCM = 48,000 bytes/sec.
+    // Streaming produces audio much faster than real-time. Calculate remaining playback time.
+    const totalAudioSeconds = this.currentTurnAudioBytes > 0 ? this.currentTurnAudioBytes / 48000 : 0;
+    const elapsedSeconds = this.currentTurnStartTime > 0 ? (Date.now() - this.currentTurnStartTime) / 1000 : 0;
+    const remainingPlaybackSeconds = Math.max(0, totalAudioSeconds - elapsedSeconds);
 
-    this.broadcast({
-      type: 'session.state_changed',
-      status: 'running',
-      speakerLock: 'idle',
-      activeSpeakerId: null,
-      generationEpoch: this.scheduler.getActiveGenerationEpoch(),
-    });
+    // Conversational breathing pause: 1.6 seconds after audio completes playing
+    const delayMs = Math.round((remainingPlaybackSeconds + 1.6) * 1000);
 
-    // Trigger next turn after a conversational interval
-    setTimeout(() => {
-      this.scheduler.triggerNextTurn();
-    }, 1500);
+    if (this.aiTurnTimerHandle) {
+      clearTimeout(this.aiTurnTimerHandle);
+    }
+
+    this.aiTurnTimerHandle = setTimeout(() => {
+      this.aiTurnTimerHandle = null;
+
+      // Only complete and schedule next if still running and not preempted by barge-in
+      if (this.isDestroyed) return;
+      const currentSpeaker = this.scheduler.getActiveSpeakerId();
+      if (currentSpeaker !== speakerId) return;
+
+      this.broadcast({
+        type: 'speaker.turn_completed',
+        speakerId,
+        turnId: turnId || '',
+        text,
+      });
+
+      this.scheduler.releaseLock();
+      this.sessionRepo.updateSpeakerLock(this.sessionId, 'idle', null);
+
+      this.broadcast({
+        type: 'session.state_changed',
+        status: 'running',
+        speakerLock: 'idle',
+        activeSpeakerId: null,
+        generationEpoch: this.scheduler.getActiveGenerationEpoch(),
+      });
+
+      // Trigger next turn after short gap
+      setTimeout(() => {
+        if (this.scheduler.getSpeakerLock() === 'idle') {
+          this.scheduler.triggerNextTurn();
+        }
+      }, 500);
+    }, delayMs);
   }
 
   private async syncContextToAllAgents(turn: { role: 'user' | 'model'; text: string }): Promise<void> {
@@ -677,6 +805,15 @@ export class SessionOrchestrator {
     this.isDestroyed = true;
     if (this.timerHandle) {
       clearTimeout(this.timerHandle);
+      this.timerHandle = null;
+    }
+    if (this.studentTurnTimerHandle) {
+      clearTimeout(this.studentTurnTimerHandle);
+      this.studentTurnTimerHandle = null;
+    }
+    if (this.aiTurnTimerHandle) {
+      clearTimeout(this.aiTurnTimerHandle);
+      this.aiTurnTimerHandle = null;
     }
     for (const provider of this.providers.values()) {
       await provider.disconnect();

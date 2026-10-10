@@ -338,6 +338,11 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
     e.preventDefault();
     if (!textInput.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
+    // If an AI is currently speaking, sending a text contribution immediately takes the floor
+    if (activeSpeakerIdRef.current && activeSpeakerIdRef.current !== 'student') {
+      handleStudentInterruption();
+    }
+
     wsRef.current.send(
       JSON.stringify({
         type: 'transcript.student_text',
@@ -346,6 +351,25 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
     );
     setTextInput('');
   };
+
+  // Keyboard shortcut: Spacebar to Barge-In / Claim Floor
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        return;
+      }
+      if (e.code === 'Space') {
+        e.preventDefault();
+        handleStudentInterruption();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleStudentInterruption]);
 
   // End Session Early
   const handleEndSession = async () => {
@@ -417,6 +441,18 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
       }
     }, 15000);
 
+    // Fetch initial canonical transcript events from SQLite
+    api
+      .getEvents(session.sessionId, token)
+      .then((data) => {
+        if (data?.events?.length) {
+          setEvents(data.events);
+        }
+      })
+      .catch((err) => {
+        console.warn('Initial events load notice:', err);
+      });
+
     // 4. Initialize Microphone Capture
     const capture = new AudioCapture(
       (audioBase64) => {
@@ -439,33 +475,31 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
 
         setIsMicSpeaking(speaking);
         if (speaking && ws.readyState === WebSocket.OPEN) {
-          // If student starts speaking while AI is talking, trigger interruption
-          if (activeSpeakerIdRef.current && activeSpeakerIdRef.current !== 'student') {
-            handleStudentInterruption();
+          // If candidate is the active speaker or floor is idle, broadcast turn start
+          // Note: Automatic interruption solely by mic energy during AI speech is disabled
+          // to prevent laptop speaker acoustic echo from self-interrupting the AI speaker.
+          // Explicit barge-in is triggered via [⚡ Barge In], Spacebar, or typing chat.
+          if (activeSpeakerIdRef.current === 'student' || activeSpeakerIdRef.current === null) {
+            ws.send(JSON.stringify({ type: 'student.turn_start' }));
           }
-          ws.send(JSON.stringify({ type: 'student.turn_start' }));
         } else if (!speaking && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'student.turn_end' }));
+          if (activeSpeakerIdRef.current === 'student') {
+            ws.send(JSON.stringify({ type: 'student.turn_end' }));
+          }
         }
       }
     );
     audioCaptureRef.current = capture;
-
-    capture.start().catch((err) => {
-      const msg = err instanceof Error ? err.message : 'Microphone access denied or unavailable.';
-      setAudioError(`${msg} (You can use text chat input below as fallback)`);
-    });
 
     // 5. Initialize Live Speech Recognizer for candidate microphone
     const recognizer = new SpeechRecognizer({
       onSpeechStart: () => {
         if (isMicMutedRef.current || sessionStatusRef.current !== 'running') return;
         setIsMicSpeaking(true);
-        if (activeSpeakerIdRef.current && activeSpeakerIdRef.current !== 'student') {
-          handleStudentInterruption();
-        }
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'student.turn_start' }));
+        if (activeSpeakerIdRef.current === 'student' || activeSpeakerIdRef.current === null) {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'student.turn_start' }));
+          }
         }
       },
       onSpeechEnd: () => {
@@ -496,9 +530,19 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
       },
     });
     speechRecognizerRef.current = recognizer;
-    if (recognizer.isSupported() && !isMicMutedRef.current) {
-      recognizer.start();
-    }
+
+    // Start audio capture, then start SpeechRecognizer once microphone permission is granted
+    capture
+      .start()
+      .then(() => {
+        if (recognizer.isSupported() && !isMicMutedRef.current) {
+          recognizer.start();
+        }
+      })
+      .catch((err) => {
+        const msg = err instanceof Error ? err.message : 'Microphone access denied or unavailable.';
+        setAudioError(`${msg} (You can use text chat input below as fallback)`);
+      });
 
     return () => {
       clearInterval(pingInterval);
