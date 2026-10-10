@@ -57,3 +57,33 @@ class MockAudioContext {
 
 (global.window as any).AudioContext = MockAudioContext;
 (global.window as any).webkitAudioContext = MockAudioContext;
+
+// Mock HTMLCanvasElement.prototype.getContext for jsdom
+if (typeof HTMLCanvasElement !== 'undefined') {
+  HTMLCanvasElement.prototype.getContext = () =>
+    ({
+      fillRect: () => {},
+      clearRect: () => {},
+      getImageData: () => ({ data: new Array(4) }),
+      putImageData: () => {},
+      createImageData: () => [],
+      setTransform: () => {},
+      drawImage: () => {},
+      save: () => {},
+      fillText: () => {},
+      restore: () => {},
+      beginPath: () => {},
+      moveTo: () => {},
+      lineTo: () => {},
+      closePath: () => {},
+      stroke: () => {},
+      fill: () => {},
+      arc: () => {},
+      createRadialGradient: () => ({
+        addColorStop: () => {},
+      }),
+      createLinearGradient: () => ({
+        addColorStop: () => {},
+      }),
+    } as any);
+}

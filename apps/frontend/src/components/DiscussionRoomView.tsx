@@ -52,8 +52,8 @@ const GD_PARTICIPANTS: ParticipantMeta[] = [
     name: 'Mr. S. Rao (Moderator)',
     role: 'Discussion Moderator',
     badge: 'Moderator',
-    color: 'border-slate-700 bg-slate-900/60 text-slate-300',
-    activeColor: 'border-blue-500 bg-blue-950/40 text-blue-200 ring-2 ring-blue-500/50 shadow-lg shadow-blue-500/20',
+    color: 'border-white/[0.08] bg-[#101112] text-neutral-300',
+    activeColor: 'border-violet-500 bg-violet-950/30 text-violet-200 ring-2 ring-violet-500/50 shadow-lg shadow-violet-500/20',
     isAi: true,
   },
   {
@@ -61,8 +61,8 @@ const GD_PARTICIPANTS: ParticipantMeta[] = [
     name: 'Priya Sharma',
     role: 'Analytical & Data-Driven',
     badge: 'Analytical',
-    color: 'border-slate-800 bg-slate-900/40 text-slate-300',
-    activeColor: 'border-blue-400 bg-blue-950/40 text-blue-100 ring-2 ring-blue-400/50 shadow-lg shadow-blue-400/20',
+    color: 'border-white/[0.08] bg-[#101112] text-neutral-300',
+    activeColor: 'border-blue-400 bg-blue-950/30 text-blue-100 ring-2 ring-blue-400/50 shadow-lg shadow-blue-400/20',
     isAi: true,
   },
   {
@@ -70,8 +70,8 @@ const GD_PARTICIPANTS: ParticipantMeta[] = [
     name: 'Rohan Mehta',
     role: 'Challenger & Contrarian',
     badge: 'Challenger',
-    color: 'border-slate-800 bg-slate-900/40 text-slate-300',
-    activeColor: 'border-amber-400 bg-amber-950/40 text-amber-100 ring-2 ring-amber-400/50 shadow-lg shadow-amber-400/20',
+    color: 'border-white/[0.08] bg-[#101112] text-neutral-300',
+    activeColor: 'border-amber-400 bg-amber-950/30 text-amber-100 ring-2 ring-amber-400/50 shadow-lg shadow-amber-400/20',
     isAi: true,
   },
   {
@@ -79,8 +79,8 @@ const GD_PARTICIPANTS: ParticipantMeta[] = [
     name: 'Ananya Iyer',
     role: 'Problem Solver & Structured',
     badge: 'Problem Solver',
-    color: 'border-slate-800 bg-slate-900/40 text-slate-300',
-    activeColor: 'border-emerald-400 bg-emerald-950/40 text-emerald-100 ring-2 ring-emerald-400/50 shadow-lg shadow-emerald-400/20',
+    color: 'border-white/[0.08] bg-[#101112] text-neutral-300',
+    activeColor: 'border-emerald-400 bg-emerald-950/30 text-emerald-100 ring-2 ring-emerald-400/50 shadow-lg shadow-emerald-400/20',
     isAi: true,
   },
   {
@@ -88,8 +88,8 @@ const GD_PARTICIPANTS: ParticipantMeta[] = [
     name: 'Vikram Patel',
     role: 'Collaborator & Synthesizer',
     badge: 'Collaborator',
-    color: 'border-slate-800 bg-slate-900/40 text-slate-300',
-    activeColor: 'border-cyan-400 bg-cyan-950/40 text-cyan-100 ring-2 ring-cyan-400/50 shadow-lg shadow-cyan-400/20',
+    color: 'border-white/[0.08] bg-[#101112] text-neutral-300',
+    activeColor: 'border-cyan-400 bg-cyan-950/30 text-cyan-100 ring-2 ring-cyan-400/50 shadow-lg shadow-cyan-400/20',
     isAi: true,
   },
 ];
@@ -587,13 +587,13 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
   const activeAiParticipant = participants.find((p) => isParticipantSpeaking(p.id, activeSpeakerId));
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] max-w-7xl mx-auto px-4 py-4 gap-4">
+    <div className="flex flex-col h-[calc(100vh-4.5rem)] max-w-7xl mx-auto px-4 py-3 gap-4 selection:bg-violet-500/30 selection:text-violet-200">
       {/* Top Header Bar */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl px-5 py-3.5 flex flex-wrap items-center justify-between gap-4 backdrop-blur-sm">
+      <div className="bg-[#0c0d11]/90 border border-white/[0.08] rounded-2xl px-5 py-3.5 flex flex-wrap items-center justify-between gap-4 backdrop-blur-md shadow-xl shadow-black">
         <div className="flex items-center gap-3">
           <span
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
-              session.mode === 'gd' ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40' : 'bg-purple-600/30 text-purple-300 border border-purple-500/40'
+            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold uppercase tracking-wider ${
+              session.mode === 'gd' ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
             }`}
           >
             {session.mode === 'gd' ? 'Group Discussion' : 'Technical Interview'}
@@ -607,7 +607,7 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
         <div className="flex items-center gap-4">
           {/* Interruption Alert Banner */}
           {interruptionNotice && (
-            <div className="px-3 py-1 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-300 text-xs font-semibold flex items-center gap-1.5 animate-pulse">
+            <div className="px-3 py-1 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-300 text-xs font-mono font-semibold flex items-center gap-1.5 animate-pulse">
               <Zap className="w-3.5 h-3.5" />
               <span>Student Barge-In Active</span>
             </div>
@@ -615,20 +615,20 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
 
           {/* Timer Display */}
           <div
-            className={`px-3 py-1 rounded-xl font-mono text-sm font-bold border flex items-center gap-1.5 ${
+            className={`px-3 py-1 rounded-xl font-mono text-xs font-bold border flex items-center gap-1.5 ${
               secondsRemaining <= 30
                 ? 'bg-red-950/40 border-red-500/60 text-red-400 animate-pulse'
                 : secondsRemaining <= 60
                 ? 'bg-amber-950/40 border-amber-500/60 text-amber-300'
-                : 'bg-slate-950 border-slate-800 text-slate-200'
+                : 'bg-black/60 border-white/[0.08] text-neutral-300'
             }`}
           >
-            <Radio className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+            <Radio className="w-3 h-3 text-violet-400 animate-pulse" />
             <span>{formatTime(secondsRemaining)}</span>
           </div>
 
           {/* Connection Status Badge */}
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex items-center gap-2 text-xs font-mono">
             {connectionState === 'connected' ? (
               <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
@@ -651,7 +651,7 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
           <button
             type="button"
             onClick={handleEndSession}
-            className="p-2 rounded-xl bg-slate-800/80 hover:bg-red-950/40 hover:text-red-300 hover:border-red-800/50 border border-slate-700/80 text-slate-400 transition-colors"
+            className="p-2 rounded-xl bg-white/[0.04] hover:bg-red-950/40 hover:text-red-300 hover:border-red-800/50 border border-white/[0.08] text-neutral-400 transition-colors cursor-pointer"
             title="Conclude Session Early"
           >
             <PhoneOff className="w-4 h-4" />
@@ -684,18 +684,18 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
             <div
               className={`p-4 rounded-2xl border flex flex-col justify-between transition-all relative ${
                 activeSpeakerId === 'student' || isMicSpeaking
-                  ? 'border-indigo-500 bg-indigo-950/30 ring-2 ring-indigo-500/50 shadow-lg shadow-indigo-500/20'
-                  : 'border-slate-800 bg-slate-900/40'
+                  ? 'border-violet-500 bg-violet-950/30 ring-2 ring-violet-500/50 shadow-lg shadow-violet-500/20'
+                  : 'border-white/[0.08] bg-[#101112]'
               }`}
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-indigo-300">
+                  <div className="w-10 h-10 rounded-xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-violet-300">
                     <User className="w-5 h-5" />
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-white">You (Student)</h3>
-                    <span className="text-[10px] text-slate-400">Candidate</span>
+                    <span className="text-[10px] text-neutral-400 font-mono">Candidate</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
@@ -706,7 +706,7 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
                   ) : (
                     <span
                       className={`p-1 rounded text-xs ${
-                        isMicSpeaking ? 'bg-indigo-600/30 text-indigo-400 animate-pulse' : 'bg-slate-800 text-slate-400'
+                        isMicSpeaking ? 'bg-violet-600/30 text-violet-400 animate-pulse' : 'bg-white/5 text-neutral-400'
                       }`}
                       title={isMicSpeaking ? 'Speaking' : 'Listening'}
                     >
@@ -718,36 +718,36 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
 
               {/* Status and Audio Waves */}
               <div className="mt-4 flex items-center justify-between">
-                <span className="text-xs text-slate-400">
+                <span className="text-xs font-mono text-neutral-400">
                   {isMicSpeaking ? 'Active Speaker' : isMicMuted ? 'Muted' : 'Ready to Speak'}
                 </span>
                 {isMicSpeaking && (
                   <div className="flex items-center gap-1">
-                    <span className="w-1 h-3 bg-indigo-500 rounded-full animate-bounce [animation-delay:0ms]"></span>
-                    <span className="w-1 h-5 bg-indigo-500 rounded-full animate-bounce [animation-delay:150ms]"></span>
-                    <span className="w-1 h-3 bg-indigo-500 rounded-full animate-bounce [animation-delay:300ms]"></span>
+                    <span className="w-1 h-3 bg-violet-400 rounded-full animate-bounce [animation-delay:0ms]"></span>
+                    <span className="w-1 h-5 bg-violet-400 rounded-full animate-bounce [animation-delay:150ms]"></span>
+                    <span className="w-1 h-3 bg-violet-400 rounded-full animate-bounce [animation-delay:300ms]"></span>
                   </div>
                 )}
               </div>
 
               {/* Real-time Mic Signal Meter */}
-              <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2">
-                <span className="text-[10px] text-slate-400">Mic Signal:</span>
-                <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div className="mt-3 pt-2.5 border-t border-white/[0.06] flex items-center justify-between gap-2">
+                <span className="text-[10px] font-mono text-neutral-400">Mic Signal:</span>
+                <div className="flex-1 h-1.5 bg-neutral-800 rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all duration-75 ${
                       isMicMuted
-                        ? 'bg-slate-700'
+                        ? 'bg-neutral-700'
                         : micLevel > 40
                         ? 'bg-amber-400'
                         : micLevel > 15
                         ? 'bg-emerald-400'
-                        : 'bg-indigo-500'
+                        : 'bg-violet-500'
                     }`}
                     style={{ width: `${isMicMuted ? 0 : Math.min(100, micLevel)}%` }}
                   />
                 </div>
-                <span className="text-[10px] font-mono text-slate-400 min-w-[28px] text-right">
+                <span className="text-[10px] font-mono text-neutral-400 min-w-[28px] text-right">
                   {isMicMuted ? 'Off' : `${micLevel}%`}
                 </span>
               </div>
@@ -801,26 +801,26 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
           </div>
 
           {/* Active Speaker Banner / Barge-In Dock */}
-          <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 flex items-center justify-between gap-4">
+          <div className="p-4 rounded-2xl bg-[#101112] border border-white/[0.08] flex items-center justify-between gap-4 shadow-lg">
             <div className="flex items-center gap-3">
               <div
                 className={`w-3 h-3 rounded-full ${
                   isAiSpeaking
                     ? 'bg-amber-400 animate-ping'
                     : isMicSpeaking
-                    ? 'bg-indigo-500 animate-ping'
+                    ? 'bg-violet-400 animate-ping'
                     : 'bg-emerald-500'
                 }`}
               />
               <div>
-                <p className="text-xs font-semibold text-slate-200">
+                <p className="text-xs font-semibold text-white">
                   {isAiSpeaking
                     ? `${activeAiParticipant?.name || 'AI Participant'} is speaking`
                     : isMicSpeaking
                     ? 'You are speaking'
                     : 'Floor is open — Jump in anytime'}
                 </p>
-                <p className="text-[11px] text-slate-400">
+                <p className="text-[11px] text-neutral-400 font-mono">
                   {isAiSpeaking
                     ? 'Press Barge In below or speak into mic to take the floor immediately'
                     : `Backend single-speaker lock: ${speakerLock}`}
@@ -832,10 +832,10 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
             <button
               type="button"
               onClick={handleStudentInterruption}
-              className={`py-2 px-4 rounded-xl font-bold text-xs flex items-center gap-2 transition-all ${
+              className={`py-2 px-4 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer font-mono ${
                 isAiSpeaking
-                  ? 'bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-white shadow-lg shadow-amber-500/25 ring-2 ring-amber-400 animate-pulse'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                  ? 'bg-gradient-to-r from-amber-500 to-violet-600 hover:from-amber-400 hover:to-violet-500 text-white shadow-lg shadow-amber-500/25 ring-2 ring-amber-400 animate-pulse'
+                  : 'bg-white/10 hover:bg-white/20 text-white border border-white/10'
               }`}
             >
               <Zap className="w-4 h-4" />
@@ -845,8 +845,8 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
         </div>
 
         {/* Right Column: Canonical Transcript Stream (5 cols on large screens) */}
-        <div className="lg:col-span-5 flex flex-col bg-slate-900/60 border border-slate-800 rounded-2xl min-h-0 overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+        <div className="lg:col-span-5 flex flex-col bg-[#0c0d11]/90 border border-white/[0.08] rounded-2xl min-h-0 overflow-hidden shadow-xl">
+          <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between bg-black/40">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
               <MessageSquare className="w-4 h-4 text-indigo-400" />
               <span>Canonical Live Transcript</span>
@@ -873,53 +873,53 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
               return (
                 <div
                   key={e.eventId}
-                  className={`p-3 rounded-xl border text-xs leading-relaxed transition-all ${
+                  className={`p-3.5 rounded-xl border text-xs leading-relaxed transition-all ${
                     isStudent
-                      ? 'border-indigo-500/30 bg-indigo-950/20 text-indigo-100 ml-4'
+                      ? 'border-violet-500/40 bg-violet-950/20 text-violet-100 ml-4 shadow-sm'
                       : e.speakerId === 'moderator'
-                      ? 'border-slate-700/60 bg-slate-950/70 text-slate-200 mr-4'
-                      : 'border-slate-800 bg-slate-950/50 text-slate-300 mr-4'
+                      ? 'border-white/10 bg-black/60 text-neutral-200 mr-4'
+                      : 'border-white/[0.06] bg-black/40 text-neutral-300 mr-4'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1.5">
                     <span
-                      className={`font-bold text-[11px] ${
-                        isStudent ? 'text-indigo-400' : 'text-slate-300'
+                      className={`font-bold text-[11px] font-mono ${
+                        isStudent ? 'text-violet-400' : 'text-neutral-300'
                       }`}
                     >
                       {e.speakerLabel}
                     </span>
-                    <span className="text-[10px] text-slate-500 font-mono">#{e.sequence}</span>
+                    <span className="text-[10px] text-neutral-500 font-mono">#{e.sequence}</span>
                   </div>
-                  <p className="break-words">{e.text}</p>
+                  <p className="break-words font-sans">{e.text}</p>
                 </div>
               );
             })}
 
             {/* Interim live transcription preview */}
             {interimText && (
-              <div className="p-3 rounded-xl border border-dashed border-indigo-500/40 bg-slate-950/40 text-xs italic text-slate-400 animate-pulse">
-                <span className="font-bold text-[11px] text-indigo-400 not-italic block mb-1">
+              <div className="p-3.5 rounded-xl border border-dashed border-violet-500/40 bg-violet-950/10 text-xs italic text-neutral-400 animate-pulse">
+                <span className="font-bold text-[11px] text-violet-400 not-italic block mb-1 font-mono">
                   {interimText.speakerLabel} (speaking...)
                 </span>
-                <p>{interimText.text}</p>
+                <p className="font-sans">{interimText.text}</p>
               </div>
             )}
           </div>
 
           {/* Fallback Text Message Form */}
-          <form onSubmit={handleSendText} className="p-3 border-t border-slate-800 bg-slate-950/80 flex gap-2">
+          <form onSubmit={handleSendText} className="p-3 border-t border-white/[0.06] bg-black/50 flex gap-2">
             <input
               type="text"
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
               placeholder="Type message fallback..."
-              className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+              className="flex-1 bg-black/70 border border-white/[0.1] rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-violet-500 font-sans"
             />
             <button
               type="submit"
               disabled={!textInput.trim()}
-              className="p-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white transition-colors"
+              className="p-2.5 rounded-xl bg-white text-black hover:bg-neutral-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
             >
               <Send className="w-3.5 h-3.5" />
             </button>
@@ -928,7 +928,7 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
       </div>
 
       {/* Bottom Control Dock */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl px-6 py-3 flex items-center justify-between">
+      <div className="bg-[#0c0d11]/90 border border-white/[0.08] rounded-2xl px-6 py-3 flex items-center justify-between shadow-2xl backdrop-blur-md">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -936,13 +936,13 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
               setIsMicMuted((prev) => !prev);
               audioCaptureRef.current?.resume();
             }}
-            className={`p-3 rounded-xl border transition-all flex items-center gap-2 text-xs font-semibold ${
+            className={`p-3 rounded-xl border transition-all flex items-center gap-2 text-xs font-mono font-semibold cursor-pointer ${
               isMicMuted
                 ? 'bg-red-950/40 border-red-800/60 text-red-300'
-                : 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-700'
+                : 'bg-white/[0.05] border-white/10 text-white hover:bg-white/10'
             }`}
           >
-            {isMicMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4 text-indigo-400" />}
+            {isMicMuted ? <MicOff className="w-4 h-4 text-red-400" /> : <Mic className="w-4 h-4 text-emerald-400" />}
             <span>{isMicMuted ? 'Mic Muted' : 'Mic Active'}</span>
           </button>
 
@@ -955,7 +955,7 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
                   wsRef.current.send(JSON.stringify({ type: 'student.turn_end' }));
                 }
               }}
-              className="py-2.5 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+              className="py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold font-mono transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20 cursor-pointer"
             >
               <Check className="w-4 h-4" />
               <span>Done Speaking (Pass Floor)</span>
@@ -967,7 +967,7 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
                 handleStudentInterruption();
                 audioCaptureRef.current?.resume();
               }}
-              className="py-2.5 px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-indigo-500/20"
+              className="py-2.5 px-4 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold font-mono transition-all flex items-center gap-2 shadow-lg shadow-violet-500/20 cursor-pointer"
             >
               <Mic className="w-4 h-4" />
               <span>Speak Now / Claim Floor</span>
@@ -976,24 +976,24 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
         </div>
 
         <div className="text-center hidden sm:flex items-center gap-3">
-          <div className="flex items-center gap-2 text-xs text-slate-400">
+          <div className="flex items-center gap-2 text-xs font-mono text-neutral-400">
             <span>Mic Level:</span>
-            <div className="w-24 h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700/60">
+            <div className="w-24 h-2 bg-neutral-800 rounded-full overflow-hidden border border-white/10">
               <div
                 className={`h-full transition-all duration-75 ${
-                  isMicMuted ? 'bg-slate-600' : 'bg-gradient-to-r from-emerald-500 via-teal-400 to-indigo-500'
+                  isMicMuted ? 'bg-neutral-600' : 'bg-gradient-to-r from-emerald-500 via-teal-400 to-violet-500'
                 }`}
                 style={{ width: `${isMicMuted ? 0 : Math.min(100, micLevel)}%` }}
               />
             </div>
-            <span className="font-mono text-[11px] text-slate-300 min-w-[28px]">{isMicMuted ? 'Off' : `${micLevel}%`}</span>
+            <span className="font-mono text-[11px] text-neutral-300 min-w-[28px]">{isMicMuted ? 'Off' : `${micLevel}%`}</span>
           </div>
         </div>
 
         <button
           type="button"
           onClick={handleEndSession}
-          className="py-2.5 px-5 rounded-xl bg-red-600/80 hover:bg-red-500 text-white text-xs font-semibold transition-colors flex items-center gap-2"
+          className="py-2.5 px-5 rounded-xl bg-red-600/80 hover:bg-red-500 text-white text-xs font-semibold font-mono transition-colors flex items-center gap-2 cursor-pointer shadow-md"
         >
           <PhoneOff className="w-4 h-4" />
           <span>Conclude & Generate Report</span>

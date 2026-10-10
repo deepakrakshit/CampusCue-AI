@@ -32,3 +32,9 @@ Thumbs.db
 .vscode/
 .idea/
 .vercel/
+
+
+# References and other stuffs
+reference.html
+reference_clean.html
+scratch/

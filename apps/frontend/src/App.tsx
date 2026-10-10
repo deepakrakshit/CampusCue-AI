@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { LandingView } from './components/LandingView';
+import { AboutView } from './components/AboutView';
 import { GdSetupView } from './components/GdSetupView';
 import { InterviewSetupView } from './components/InterviewSetupView';
 import { DiscussionRoomView } from './components/DiscussionRoomView';
 import { ReportView } from './components/ReportView';
 import type { SessionSnapshot } from './types';
 
-type AppView = 'landing' | 'gd-setup' | 'interview-setup' | 'room' | 'report';
+type AppView = 'landing' | 'about' | 'gd-setup' | 'interview-setup' | 'room' | 'report';
 
 export const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>('landing');
@@ -21,6 +22,10 @@ export const App: React.FC = () => {
 
   const handleStartInterview = () => {
     setCurrentView('interview-setup');
+  };
+
+  const handleNavigateAbout = () => {
+    setCurrentView('about');
   };
 
   const handleSessionCreated = (session: SessionSnapshot, token: string) => {
@@ -47,12 +52,24 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500/30 selection:text-indigo-200">
-      <Navbar onHomeClick={handleHome} currentView={currentView} />
+    <div className="min-h-screen bg-black text-white flex flex-col font-sans selection:bg-violet-500/30 selection:text-violet-200">
+      <Navbar
+        onHomeClick={handleHome}
+        onNavigateHome={handleHome}
+        onNavigateAbout={handleNavigateAbout}
+        onNavigateGd={handleStartGd}
+        onNavigateInterview={handleStartInterview}
+        currentView={currentView}
+        inSession={currentView === 'room'}
+      />
 
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col pt-16">
         {currentView === 'landing' && (
           <LandingView onStartGd={handleStartGd} onStartInterview={handleStartInterview} />
+        )}
+
+        {currentView === 'about' && (
+          <AboutView onStartGd={handleStartGd} onStartInterview={handleStartInterview} />
         )}
 
         {currentView === 'gd-setup' && (
