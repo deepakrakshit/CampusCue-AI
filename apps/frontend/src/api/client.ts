@@ -4,7 +4,8 @@ export class ApiClient {
   private baseUrl = '';
 
   constructor(baseUrl = '') {
-    this.baseUrl = baseUrl;
+    const envBase = (import.meta as any).env?.VITE_API_BASE_URL || '';
+    this.baseUrl = (baseUrl || envBase).replace(/\/$/, '');
   }
 
   async checkHealth(): Promise<{ status: string }> {
@@ -107,6 +108,12 @@ export class ApiClient {
   }
 
   createWebSocketConnection(sessionId: string, token: string): WebSocket {
+    const envWs = (import.meta as any).env?.VITE_WS_BASE_URL || '';
+    if (envWs) {
+      const wsOrigin = envWs.replace(/^http/, 'ws').replace(/\/$/, '');
+      const wsUrl = `${wsOrigin}/ws/sessions/${sessionId}?token=${encodeURIComponent(token)}`;
+      return new WebSocket(wsUrl);
+    }
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
     const wsUrl = `${protocol}//${host}/ws/sessions/${sessionId}?token=${encodeURIComponent(token)}`;

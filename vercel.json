@@ -1,0 +1,11 @@
+{
+  "buildCommand": "npm --workspace=apps/frontend run build",
+  "outputDirectory": "apps/frontend/dist",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
