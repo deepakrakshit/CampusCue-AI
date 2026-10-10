@@ -151,12 +151,28 @@ export const GdSetupView: React.FC<GdSetupViewProps> = ({ onSessionCreated, onCa
         </div>
 
         {error && (
-          <div className="p-4 rounded-xl bg-red-950/40 border border-red-800/60 text-red-300 text-sm flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-400" />
-            <div>
-              <p className="font-semibold text-xs font-mono uppercase">Initialization Error</p>
-              <p className="text-red-300/90 text-xs mt-0.5">{error}</p>
+          <div className="p-4 rounded-xl bg-red-950/40 border border-red-800/60 text-red-300 text-sm flex flex-col gap-2">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-400" />
+              <div>
+                <p className="font-semibold text-xs font-mono uppercase">Initialization Error</p>
+                <p className="text-red-300/90 text-xs mt-0.5">{error}</p>
+              </div>
             </div>
+            {(error.includes('405') || error.includes('static preview') || error.includes('unreachable')) && (
+              <div className="mt-2 pt-2 border-t border-red-900/60 text-xs space-y-2">
+                <p className="font-semibold text-amber-300">💡 Why is this happening?</p>
+                <p className="text-neutral-300 leading-relaxed">
+                  CampusCue AI utilizes real-time persistent WebSockets and bidirectional audio streaming via Google Gemini Live API. On static preview hosts (such as Vercel), the live Fastify backend is not active.
+                </p>
+                <div className="p-3 rounded-lg bg-black/60 border border-white/10 font-mono text-[11px] text-neutral-300 space-y-1">
+                  <p className="text-emerald-400 font-semibold">🚀 Practice with full live voice on Localhost:</p>
+                  <p>1. Keep <span className="text-white font-bold">run.bat</span> running on your computer.</p>
+                  <p>2. Open <a href="http://localhost:3000" className="text-cyan-400 underline hover:text-cyan-300">http://localhost:3000</a> in your browser.</p>
+                  <p className="text-neutral-400 mt-1">Both the Fastify backend (Port 3001) and React UI (Port 3000) are fully connected there.</p>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

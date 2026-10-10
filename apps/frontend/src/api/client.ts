@@ -4,24 +4,58 @@ export class ApiClient {
   private baseUrl = '';
 
   constructor(baseUrl = '') {
+    this.baseUrl = baseUrl.replace(/\/$/, '');
+  }
+
+  getBaseUrl(): string {
+    if (this.baseUrl) return this.baseUrl;
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('campuscue_api_base_url');
+      if (stored) return stored.replace(/\/$/, '');
+    }
     const envBase = (import.meta as any).env?.VITE_API_BASE_URL || '';
-    this.baseUrl = (baseUrl || envBase).replace(/\/$/, '');
+    return envBase.replace(/\/$/, '');
+  }
+
+  setBaseUrl(url: string): void {
+    this.baseUrl = url.replace(/\/$/, '');
+    if (typeof window !== 'undefined') {
+      if (url) {
+        localStorage.setItem('campuscue_api_base_url', this.baseUrl);
+      } else {
+        localStorage.removeItem('campuscue_api_base_url');
+      }
+    }
   }
 
   async checkHealth(): Promise<{ status: string }> {
-    const res = await fetch(`${this.baseUrl}/health/live`);
+    const base = this.getBaseUrl();
+    const res = await fetch(`${base}/health/live`);
     if (!res.ok) throw new Error(`Health check failed: ${res.status}`);
     return res.json();
   }
 
   async createSession(payload: unknown): Promise<{ session: SessionSnapshot; sessionAccessToken: string }> {
-    const res = await fetch(`${this.baseUrl}/api/v1/sessions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    const base = this.getBaseUrl();
+    let res: Response;
+    try {
+      res = await fetch(`${base}/api/v1/sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      throw new Error(
+        'Backend unreachable. Please ensure the CampusCue AI server is running locally via run.bat (http://localhost:3000) or configure a backend URL.'
+      );
+    }
 
     if (!res.ok) {
+      if (res.status === 405) {
+        throw new Error(
+          'Backend not available on this static preview host (HTTP 405). Live AI voice discussions and WebSockets require the Fastify backend. Please launch run.bat and use http://localhost:3000, or connect a deployed backend server.'
+        );
+      }
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error?.message || `Failed to create session (${res.status})`);
     }
@@ -30,7 +64,8 @@ export class ApiClient {
   }
 
   async getSession(sessionId: string, token: string): Promise<SessionSnapshot> {
-    const res = await fetch(`${this.baseUrl}/api/v1/sessions/${sessionId}`, {
+    const base = this.getBaseUrl();
+    const res = await fetch(`${base}/api/v1/sessions/${sessionId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
@@ -39,7 +74,8 @@ export class ApiClient {
   }
 
   async startSession(sessionId: string, token: string): Promise<SessionSnapshot> {
-    const res = await fetch(`${this.baseUrl}/api/v1/sessions/${sessionId}/start`, {
+    const base = this.getBaseUrl();
+    const res = await fetch(`${base}/api/v1/sessions/${sessionId}/start`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -49,7 +85,8 @@ export class ApiClient {
   }
 
   async endSession(sessionId: string, token: string, reason = 'user-ended'): Promise<SessionSnapshot> {
-    const res = await fetch(`${this.baseUrl}/api/v1/sessions/${sessionId}/end`, {
+    const base = this.getBaseUrl();
+    const res = await fetch(`${base}/api/v1/sessions/${sessionId}/end`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -68,8 +105,9 @@ export class ApiClient {
     afterSequence = 0,
     limit = 100
   ): Promise<{ sessionId: string; events: SessionEvent[]; lastSequence: number; hasMore: boolean }> {
+    const base = this.getBaseUrl();
     const res = await fetch(
-      `${this.baseUrl}/api/v1/sessions/${sessionId}/events?afterSequence=${afterSequence}&limit=${limit}`,
+      `${base}/api/v1/sessions/${sessionId}/events?afterSequence=${afterSequence}&limit=${limit}`,
       {
         headers: { Authorization: `Bearer ${token}` },
       }
@@ -80,7 +118,8 @@ export class ApiClient {
   }
 
   async getReport(sessionId: string, token: string): Promise<Report | { status: 'pending' }> {
-    const res = await fetch(`${this.baseUrl}/api/v1/sessions/${sessionId}/report`, {
+    const base = this.getBaseUrl();
+    const res = await fetch(`${base}/api/v1/sessions/${sessionId}/report`, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
@@ -89,7 +128,8 @@ export class ApiClient {
   }
 
   async retryReport(sessionId: string, token: string): Promise<{ status: 'pending' }> {
-    const res = await fetch(`${this.baseUrl}/api/v1/sessions/${sessionId}/report/retry`, {
+    const base = this.getBaseUrl();
+    const res = await fetch(`${base}/api/v1/sessions/${sessionId}/report/retry`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -99,7 +139,8 @@ export class ApiClient {
   }
 
   async deleteSession(sessionId: string, token: string): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/api/v1/sessions/${sessionId}`, {
+    const base = this.getBaseUrl();
+    const res = await fetch(`${base}/api/v1/sessions/${sessionId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -108,9 +149,16 @@ export class ApiClient {
   }
 
   createWebSocketConnection(sessionId: string, token: string): WebSocket {
-    const envWs = (import.meta as any).env?.VITE_WS_BASE_URL || '';
-    if (envWs) {
-      const wsOrigin = envWs.replace(/^http/, 'ws').replace(/\/$/, '');
+    let wsBase = '';
+    if (typeof window !== 'undefined') {
+      wsBase = localStorage.getItem('campuscue_ws_base_url') || '';
+    }
+    if (!wsBase) {
+      wsBase = (import.meta as any).env?.VITE_WS_BASE_URL || '';
+    }
+
+    if (wsBase) {
+      const wsOrigin = wsBase.replace(/^http/, 'ws').replace(/\/$/, '');
       const wsUrl = `${wsOrigin}/ws/sessions/${sessionId}?token=${encodeURIComponent(token)}`;
       return new WebSocket(wsUrl);
     }
