@@ -9,6 +9,7 @@ export const ClientAudioChunkSchema = z.object({
 
 export const ClientInterruptionSchema = z.object({
   type: z.literal('student.interruption'),
+  generationEpoch: z.number().optional(),
   timestamp: z.number().optional(),
 });
 
@@ -16,8 +17,17 @@ export const ClientSpeechStartedSchema = z.object({
   type: z.literal('student.speech_started'),
 });
 
+export const ClientTurnStartSchema = z.object({
+  type: z.literal('student.turn_start'),
+});
+
 export const ClientSpeechStoppedSchema = z.object({
   type: z.literal('student.speech_stopped'),
+  text: z.string().optional(),
+});
+
+export const ClientTurnEndSchema = z.object({
+  type: z.literal('student.turn_end'),
   text: z.string().optional(),
 });
 
@@ -30,9 +40,19 @@ export const ClientEndRequestedSchema = z.object({
   reason: z.enum(['user-ended', 'deadline', 'provider-error']).optional().default('user-ended'),
 });
 
+export const ClientSessionEndSchema = z.object({
+  type: z.literal('session.end'),
+  reason: z.enum(['user-ended', 'deadline', 'provider-error']).optional().default('user-ended'),
+});
+
 export const ClientPingSchema = z.object({
   type: z.literal('client.ping'),
   timestamp: z.number(),
+});
+
+export const ClientShortPingSchema = z.object({
+  type: z.literal('ping'),
+  timestamp: z.number().optional(),
 });
 
 export const ClientTranscriptTextSchema = z.object({
@@ -44,10 +64,14 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   ClientAudioChunkSchema,
   ClientInterruptionSchema,
   ClientSpeechStartedSchema,
+  ClientTurnStartSchema,
   ClientSpeechStoppedSchema,
+  ClientTurnEndSchema,
   ClientStartRequestedSchema,
   ClientEndRequestedSchema,
+  ClientSessionEndSchema,
   ClientPingSchema,
+  ClientShortPingSchema,
   ClientTranscriptTextSchema,
 ]);
 

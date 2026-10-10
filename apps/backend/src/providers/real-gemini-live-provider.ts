@@ -80,6 +80,7 @@ export class RealGeminiLiveProvider implements LiveProvider {
       model: this.modelId,
       config: {
         responseModalities: ['audio'],
+        outputAudioTranscription: {},
         systemInstruction: {
           parts: [{ text: this.systemInstruction }],
         },
@@ -213,16 +214,14 @@ export class RealGeminiLiveProvider implements LiveProvider {
     }
 
     if (msg.serverContent?.outputTranscription?.text) {
-      this.currentTurnText = msg.serverContent.outputTranscription.text;
+      this.currentTurnText += msg.serverContent.outputTranscription.text;
       this.callbacks.onInterimText?.(this.currentTurnText);
     }
 
     if (msg.serverContent?.turnComplete) {
-      const final = this.currentTurnText;
+      const final = this.currentTurnText.trim();
       this.currentTurnText = '';
-      if (final) {
-        this.callbacks.onFinalText?.(final);
-      }
+      this.callbacks.onFinalText?.(final || '(Spoken contribution)');
     }
   }
 }

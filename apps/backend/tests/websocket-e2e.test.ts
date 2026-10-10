@@ -114,4 +114,80 @@ describe('WebSocket Real-Time End-to-End Protocol', () => {
     ws.close();
     await new Promise((r) => setTimeout(r, 100));
   });
+
+  it('handles session.start_requested, moderator opening event, and student.turn_start / student.turn_end aliases', async () => {
+    // 1. Create a session via REST API
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/sessions',
+      payload: {
+        mode: 'gd',
+        topic: 'AI and Software Engineering: Augmentation vs Replacement',
+        durationSeconds: 180,
+      },
+    });
+    expect(createRes.statusCode).toBe(201);
+    const { session, sessionAccessToken } = JSON.parse(createRes.body);
+    const sessionId = session.sessionId;
+
+    const receivedMessages: any[] = [];
+    const ws = new WebSocket(`ws://127.0.0.1:${serverPort}/ws/sessions/${sessionId}?token=${sessionAccessToken}`);
+
+    ws.on('message', (raw) => {
+      try {
+        const parsed = JSON.parse(raw.toString('utf-8'));
+        receivedMessages.push(parsed);
+      } catch {
+        // ignore
+      }
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      ws.on('open', () => resolve());
+      ws.on('error', (err) => reject(err));
+    });
+
+    // 2. Send session.start_requested
+    ws.send(JSON.stringify({ type: 'session.start_requested' }));
+
+    // Wait for moderator opening message
+    await new Promise((r) => setTimeout(r, 600));
+
+    const stateRunning = receivedMessages.find(
+      (m) => m.type === 'session.state_changed' && m.status === 'running'
+    );
+    expect(stateRunning).toBeDefined();
+
+    const moderatorMsg = receivedMessages.find(
+      (m) => m.type === 'transcript.final' && m.event.speakerId === 'moderator'
+    );
+    expect(moderatorMsg).toBeDefined();
+    expect(moderatorMsg.event.text).toContain('Welcome participants');
+
+    // 3. Test student.turn_start alias
+    ws.send(JSON.stringify({ type: 'student.turn_start' }));
+    await new Promise((r) => setTimeout(r, 200));
+
+    const studentSpeakingState = receivedMessages.find(
+      (m) => m.type === 'session.state_changed' && m.speakerLock === 'student-speaking'
+    );
+    expect(studentSpeakingState).toBeDefined();
+
+    // 4. Test student.turn_end alias
+    ws.send(
+      JSON.stringify({
+        type: 'student.turn_end',
+        text: 'I agree that AI will augment developers rather than replace them.',
+      })
+    );
+    await new Promise((r) => setTimeout(r, 300));
+
+    const finalStudentMsg = receivedMessages.find(
+      (m) => m.type === 'transcript.final' && m.event.speakerId === 'student' && m.event.text.includes('augment')
+    );
+    expect(finalStudentMsg).toBeDefined();
+
+    ws.close();
+    await new Promise((r) => setTimeout(r, 100));
+  });
 });

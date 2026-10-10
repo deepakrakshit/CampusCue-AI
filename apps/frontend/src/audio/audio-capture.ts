@@ -5,6 +5,8 @@ export class AudioCapture {
   private source: MediaStreamAudioSourceNode | null = null;
   private isRecording = false;
   private wasSpeaking = false;
+  private speakingBlockCount = 0;
+  private silentBlockCount = 0;
 
   constructor(
     private onChunk: (base64Pcm: string) => void,
@@ -41,11 +43,23 @@ export class AudioCapture {
           sumSquares += inputData[i] * inputData[i];
         }
         const rms = Math.sqrt(sumSquares / inputData.length);
-        const isSpeakingNow = rms > 0.02;
+        
+        // Voice activity threshold (0.045 filters room noise/hum while detecting clear speech)
+        if (rms > 0.045) {
+          this.speakingBlockCount++;
+          this.silentBlockCount = 0;
+        } else {
+          this.silentBlockCount++;
+          this.speakingBlockCount = 0;
+        }
 
-        if (this.onSpeaking && isSpeakingNow !== this.wasSpeaking) {
-          this.wasSpeaking = isSpeakingNow;
-          this.onSpeaking(isSpeakingNow);
+        // Debounced speaking transition: require 2 blocks (~500ms) to start, 4 blocks (~1s) to stop
+        if (!this.wasSpeaking && this.speakingBlockCount >= 2) {
+          this.wasSpeaking = true;
+          this.onSpeaking?.(true);
+        } else if (this.wasSpeaking && this.silentBlockCount >= 4) {
+          this.wasSpeaking = false;
+          this.onSpeaking?.(false);
         }
 
         // Convert Float32Array to 16-bit PCM little-endian
@@ -76,6 +90,8 @@ export class AudioCapture {
   stop(): void {
     this.isRecording = false;
     this.wasSpeaking = false;
+    this.speakingBlockCount = 0;
+    this.silentBlockCount = 0;
 
     if (this.processor) {
       try {

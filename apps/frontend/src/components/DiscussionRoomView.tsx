@@ -47,7 +47,7 @@ interface ParticipantMeta {
 const GD_PARTICIPANTS: ParticipantMeta[] = [
   {
     id: 'moderator',
-    name: 'Mr. S. Rao',
+    name: 'Mr. S. Rao (Moderator)',
     role: 'Discussion Moderator',
     badge: 'Moderator',
     color: 'border-slate-700 bg-slate-900/60 text-slate-300',
@@ -55,8 +55,8 @@ const GD_PARTICIPANTS: ParticipantMeta[] = [
     isAi: true,
   },
   {
-    id: 'priya',
-    name: 'Priya Patel',
+    id: 'agent_a',
+    name: 'Priya Sharma',
     role: 'Analytical & Data-Driven',
     badge: 'Analytical',
     color: 'border-slate-800 bg-slate-900/40 text-slate-300',
@@ -64,8 +64,8 @@ const GD_PARTICIPANTS: ParticipantMeta[] = [
     isAi: true,
   },
   {
-    id: 'rohan',
-    name: 'Rohan Verma',
+    id: 'agent_b',
+    name: 'Rohan Mehta',
     role: 'Challenger & Contrarian',
     badge: 'Challenger',
     color: 'border-slate-800 bg-slate-900/40 text-slate-300',
@@ -73,7 +73,7 @@ const GD_PARTICIPANTS: ParticipantMeta[] = [
     isAi: true,
   },
   {
-    id: 'ananya',
+    id: 'agent_c',
     name: 'Ananya Iyer',
     role: 'Problem Solver & Structured',
     badge: 'Problem Solver',
@@ -82,8 +82,8 @@ const GD_PARTICIPANTS: ParticipantMeta[] = [
     isAi: true,
   },
   {
-    id: 'vikram',
-    name: 'Vikram Malhotra',
+    id: 'agent_d',
+    name: 'Vikram Patel',
     role: 'Collaborator & Synthesizer',
     badge: 'Collaborator',
     color: 'border-slate-800 bg-slate-900/40 text-slate-300',
@@ -91,6 +91,17 @@ const GD_PARTICIPANTS: ParticipantMeta[] = [
     isAi: true,
   },
 ];
+
+function isParticipantSpeaking(participantId: string, speakerId: string | null): boolean {
+  if (!speakerId) return false;
+  if (speakerId === participantId) return true;
+  if (participantId === 'agent_a' && (speakerId === 'priya' || speakerId.includes('Priya'))) return true;
+  if (participantId === 'agent_b' && (speakerId === 'rohan' || speakerId.includes('Rohan'))) return true;
+  if (participantId === 'agent_c' && (speakerId === 'ananya' || speakerId.includes('Ananya'))) return true;
+  if (participantId === 'agent_d' && (speakerId === 'vikram' || speakerId.includes('Vikram'))) return true;
+  if (participantId === 'moderator' && (speakerId === 'moderator' || speakerId.includes('Moderator') || speakerId.includes('Rao'))) return true;
+  return false;
+}
 
 const INTERVIEW_PARTICIPANTS: ParticipantMeta[] = [
   {
@@ -138,11 +149,26 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
   const currentEpochRef = useRef<number>(session.generationEpoch);
   const isInterruptionCooldownRef = useRef<boolean>(false);
+  const isMicMutedRef = useRef<boolean>(isMicMuted);
+  const sessionStatusRef = useRef<SessionStatus>(sessionStatus);
+  const activeSpeakerIdRef = useRef<string | null>(activeSpeakerId);
 
-  // Update currentEpochRef whenever state changes
+  // Synchronize state to refs for non-tearing background loops
   useEffect(() => {
     currentEpochRef.current = generationEpoch;
   }, [generationEpoch]);
+
+  useEffect(() => {
+    isMicMutedRef.current = isMicMuted;
+  }, [isMicMuted]);
+
+  useEffect(() => {
+    sessionStatusRef.current = sessionStatus;
+  }, [sessionStatus]);
+
+  useEffect(() => {
+    activeSpeakerIdRef.current = activeSpeakerId;
+  }, [activeSpeakerId]);
 
   // Auto-scroll transcript to bottom
   const scrollToBottom = useCallback(() => {
@@ -346,7 +372,16 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
 
     ws.onopen = () => {
       setConnectionState('connected');
+      // Request backend to start session orchestration and initialize providers
+      ws.send(JSON.stringify({ type: 'session.start_requested' }));
     };
+
+    // Auto-start via REST API if session is in 'created' state
+    if (session.status === 'created') {
+      api.startSession(session.sessionId, token).catch((err) => {
+        console.warn('REST startSession notice:', err);
+      });
+    }
 
     ws.onmessage = (event: MessageEvent) => {
       try {
@@ -377,7 +412,7 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
     const capture = new AudioCapture(
       (audioBase64) => {
         // Callback on audio chunk from microphone
-        if (ws.readyState === WebSocket.OPEN && !isMicMuted) {
+        if (ws.readyState === WebSocket.OPEN && !isMicMutedRef.current && sessionStatusRef.current === 'running') {
           ws.send(
             JSON.stringify({
               type: 'audio.chunk',
@@ -387,10 +422,16 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
         }
       },
       (speaking) => {
+        // Disregard speech if mic is muted or session is not actively running
+        if (isMicMutedRef.current || sessionStatusRef.current !== 'running') {
+          setIsMicSpeaking(false);
+          return;
+        }
+
         setIsMicSpeaking(speaking);
         if (speaking && ws.readyState === WebSocket.OPEN) {
           // If student starts speaking while AI is talking, trigger interruption
-          if (activeSpeakerId && activeSpeakerId !== 'student') {
+          if (activeSpeakerIdRef.current && activeSpeakerIdRef.current !== 'student') {
             handleStudentInterruption();
           }
           ws.send(JSON.stringify({ type: 'student.turn_start' }));
@@ -412,7 +453,7 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
       player.dispose();
       ws.close();
     };
-  }, [session.sessionId, token, session.generationEpoch, isMicMuted, activeSpeakerId, handleServerMessage, handleStudentInterruption]);
+  }, [session.sessionId, token, session.status, session.generationEpoch, handleServerMessage, handleStudentInterruption]);
 
   // Format seconds mm:ss
   const formatTime = (secs: number) => {
@@ -423,7 +464,7 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
 
   const participants = session.mode === 'gd' ? GD_PARTICIPANTS : INTERVIEW_PARTICIPANTS;
   const isAiSpeaking = activeSpeakerId !== null && activeSpeakerId !== 'student';
-  const activeAiParticipant = participants.find((p) => p.id === activeSpeakerId);
+  const activeAiParticipant = participants.find((p) => isParticipantSpeaking(p.id, activeSpeakerId));
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] max-w-7xl mx-auto px-4 py-4 gap-4">
@@ -572,7 +613,7 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
 
             {/* AI Participant Cards */}
             {participants.map((p) => {
-              const isSpeaking = activeSpeakerId === p.id;
+              const isSpeaking = isParticipantSpeaking(p.id, activeSpeakerId);
               return (
                 <div
                   key={p.id}

@@ -67,10 +67,12 @@ export const websocketRoutes: FastifyPluginAsync = async (fastify) => {
             await orchestrator.handleStudentBargeIn();
             break;
 
+          case 'student.turn_start':
           case 'student.speech_started':
-            // Student started speaking
+            await orchestrator.handleStudentSpeechStarted();
             break;
 
+          case 'student.turn_end':
           case 'student.speech_stopped':
             await orchestrator.handleStudentSpeechStopped(msg.text || '');
             break;
@@ -84,15 +86,17 @@ export const websocketRoutes: FastifyPluginAsync = async (fastify) => {
             await orchestrator.startSession();
             break;
 
+          case 'session.end':
           case 'session.end_requested':
             await orchestrator.endSession(msg.reason);
             break;
 
+          case 'ping':
           case 'client.ping':
             socket.send(
               JSON.stringify({
                 type: 'pong',
-                timestamp: msg.timestamp,
+                timestamp: msg.timestamp ?? Date.now(),
               })
             );
             break;

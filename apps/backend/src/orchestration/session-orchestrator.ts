@@ -90,11 +90,13 @@ export class SessionOrchestrator {
   }
 
   async initializeProviders(useMock = false): Promise<void> {
+    if (this.providers.size > 0) return;
+
     const session = this.sessionRepo.getSessionById(this.sessionId);
     if (!session) return;
 
     const env = getEnv();
-    const isMock = useMock || env.MOCK_PROVIDERS;
+    const isMock = useMock || env.MOCK_PROVIDERS || env.NODE_ENV === 'test';
     this.isMockMode = isMock;
 
     if (session.mode === 'gd') {
@@ -327,11 +329,58 @@ export class SessionOrchestrator {
 
     const provider = this.providers.get(speakerId);
     if (provider) {
-      // Prompt the selected provider to generate speech for its active turn
-      await provider.sendClientContent(
-        [{ role: 'user', text: `Please provide your perspective on the discussion now.` }],
-        true // turnComplete = true triggers speech generation
-      );
+      try {
+        const promptText =
+          session.mode === 'gd'
+            ? `You are ${speakerLabel}. Please speak to the group now and share your perspective on the discussion topic: "${session.topic}". Keep your response concise (2-3 sentences).`
+            : `Please ask the candidate your next technical interview question concisely.`;
+
+        await provider.sendClientContent(
+          [{ role: 'user', text: promptText }],
+          true // turnComplete = true triggers speech generation
+        );
+      } catch (err) {
+        // Recover cleanly if provider call throws
+        this.scheduler.releaseLock();
+        this.sessionRepo.updateSpeakerLock(this.sessionId, 'idle', null);
+        this.broadcast({
+          type: 'session.state_changed',
+          status: 'running',
+          speakerLock: 'idle',
+          activeSpeakerId: null,
+          generationEpoch: epoch,
+        });
+        setTimeout(() => {
+          if (this.scheduler.getSpeakerLock() === 'idle') {
+            this.scheduler.triggerNextTurn();
+          }
+        }, 1500);
+      }
+    }
+  }
+
+  /**
+   * Student starts speaking (VAD transition or mic claim): acquire lock or interrupt
+   */
+  async handleStudentSpeechStarted(): Promise<void> {
+    const session = this.sessionRepo.getSessionById(this.sessionId);
+    if (!session || session.status !== 'running') return;
+
+    if (this.scheduler.getSpeakerLock() === 'ai-speaking') {
+      await this.handleStudentBargeIn();
+      return;
+    }
+
+    if (this.scheduler.getSpeakerLock() === 'idle') {
+      this.scheduler.handleStudentBargeIn(session.generation_epoch);
+      this.sessionRepo.updateSpeakerLock(this.sessionId, 'student-speaking', 'student');
+      this.broadcast({
+        type: 'session.state_changed',
+        status: 'running',
+        speakerLock: 'student-speaking',
+        activeSpeakerId: 'student',
+        generationEpoch: session.generation_epoch,
+      });
     }
   }
 
@@ -395,6 +444,12 @@ export class SessionOrchestrator {
         activeSpeakerId: null,
         generationEpoch: this.scheduler.getActiveGenerationEpoch(),
       });
+      // Conversational flow: if student yielded without speaking, resume next AI participant
+      setTimeout(() => {
+        if (this.scheduler.getSpeakerLock() === 'idle') {
+          this.scheduler.triggerNextTurn();
+        }
+      }, 1000);
       return;
     }
 
