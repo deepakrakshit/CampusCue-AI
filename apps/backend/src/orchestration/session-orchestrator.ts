@@ -37,6 +37,7 @@ export class SessionOrchestrator {
   private chunkSequence = 0;
   private currentTurnAudioBytes = 0;
   private currentTurnStartTime = 0;
+  private studentAudioChunks: Buffer[] = [];
 
   constructor(sessionId: string, db?: DatabaseSync) {
     this.sessionId = sessionId;
@@ -463,6 +464,8 @@ export class SessionOrchestrator {
       return;
     }
 
+    this.studentAudioChunks = [];
+
     if (this.scheduler.getSpeakerLock() === 'idle') {
       this.scheduler.handleStudentBargeIn(session.generation_epoch);
       this.sessionRepo.updateSpeakerLock(this.sessionId, 'student-speaking', 'student');
@@ -473,6 +476,24 @@ export class SessionOrchestrator {
         activeSpeakerId: 'student',
         generationEpoch: session.generation_epoch,
       });
+    }
+  }
+
+  /**
+   * Buffer real-time PCM audio chunks streamed from candidate microphone
+   */
+  handleStudentAudioChunk(audioBase64: string): void {
+    if (this.isDestroyed) return;
+    if (
+      this.scheduler.getActiveSpeakerId() === 'student' ||
+      this.scheduler.getSpeakerLock() === 'student-speaking'
+    ) {
+      try {
+        const buf = Buffer.from(audioBase64, 'base64');
+        this.studentAudioChunks.push(buf);
+      } catch {
+        // ignore
+      }
     }
   }
 
@@ -488,6 +509,7 @@ export class SessionOrchestrator {
       clearTimeout(this.studentTurnTimerHandle);
       this.studentTurnTimerHandle = null;
     }
+    this.studentAudioChunks = [];
 
     const newEpoch = this.sessionRepo.incrementGenerationEpoch(this.sessionId);
     const { interruptedSpeakerId, wasAiSpeaking } = this.scheduler.handleStudentBargeIn(newEpoch);
@@ -544,7 +566,22 @@ export class SessionOrchestrator {
       this.aiTurnTimerHandle = null;
     }
 
-    if (!text || text.trim().length === 0) {
+    let resolvedText = (text || '').trim();
+
+    // If Web Speech API provided no text, transcribe accumulated microphone audio via Gemini
+    if (!resolvedText && this.studentAudioChunks.length > 0) {
+      const combinedAudio = Buffer.concat(this.studentAudioChunks);
+      this.studentAudioChunks = [];
+      try {
+        resolvedText = (await this.evaluatorService.transcribeAudio(combinedAudio)).trim();
+      } catch (err) {
+        console.warn('Backend audio transcription notice:', err);
+      }
+    } else {
+      this.studentAudioChunks = [];
+    }
+
+    if (!resolvedText || resolvedText.length === 0) {
       this.scheduler.releaseLock();
       this.sessionRepo.updateSpeakerLock(this.sessionId, 'idle', null);
       this.broadcast({
@@ -569,8 +606,8 @@ export class SessionOrchestrator {
       kind: 'transcript',
       speakerId: 'student',
       speakerLabel: 'Candidate',
-      text: text.trim(),
-      source: 'live-input-transcription',
+      text: resolvedText,
+      source: text ? 'live-input-transcription' : 'backend-audio-transcription',
     });
 
     this.broadcast({
@@ -579,7 +616,7 @@ export class SessionOrchestrator {
     });
 
     // Explicit Context Synchronization to all background agents without speaking
-    await this.syncContextToAllAgents({ role: 'user', text: `[Candidate]: ${text.trim()}` });
+    await this.syncContextToAllAgents({ role: 'user', text: `[Candidate]: ${resolvedText}` });
 
     this.scheduler.releaseLock();
     this.sessionRepo.updateSpeakerLock(this.sessionId, 'idle', null);

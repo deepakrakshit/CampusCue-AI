@@ -324,6 +324,71 @@ Return one concise sentence of constructive reviewer feedback.`;
       createdAt: new Date().toISOString(),
     };
   }
+
+  async transcribeAudio(pcmBuffer: Buffer): Promise<string> {
+    if (!pcmBuffer || pcmBuffer.length < 16000 * 2 * 0.4) {
+      return '';
+    }
+
+    const env = getEnv();
+    if (env.MOCK_PROVIDERS || env.NODE_ENV === 'test') {
+      return 'I believe that AI augmentation will transform software engineering workflows significantly.';
+    }
+
+    try {
+      const wavBuffer = pcmToWav(pcmBuffer, 16000, 1, 16);
+      const base64Wav = wavBuffer.toString('base64');
+
+      const response = await this.primaryAi.models.generateContent({
+        model: env.GEMINI_EVAL_MODEL,
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                inlineData: {
+                  mimeType: 'audio/wav',
+                  data: base64Wav,
+                },
+              },
+              {
+                text: 'Transcribe the spoken audio verbatim in English or Hinglish. If there is only background noise, breathing, or silence, reply with an empty string. Return ONLY the transcribed text without any other commentary or quotation marks.',
+              },
+            ],
+          },
+        ],
+      });
+
+      return response.text?.trim() || '';
+    } catch (err) {
+      console.warn('Backend audio transcription notice:', err);
+      return '';
+    }
+  }
+}
+
+function pcmToWav(pcmBuffer: Buffer, sampleRate = 16000, numChannels = 1, bitDepth = 16): Buffer {
+  const header = Buffer.alloc(44);
+  const byteRate = (sampleRate * numChannels * bitDepth) / 8;
+  const blockAlign = (numChannels * bitDepth) / 8;
+  const dataSize = pcmBuffer.length;
+  const chunkSize = 36 + dataSize;
+
+  header.write('RIFF', 0);
+  header.writeUInt32LE(chunkSize, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitDepth, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(dataSize, 40);
+
+  return Buffer.concat([header, pcmBuffer]);
 }
 
 interface RawModelEvaluation {

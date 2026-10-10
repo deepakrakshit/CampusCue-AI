@@ -60,7 +60,7 @@ export const websocketRoutes: FastifyPluginAsync = async (fastify) => {
 
         switch (msg.type) {
           case 'audio.chunk':
-            // Audio streaming from student microphone
+            orchestrator.handleStudentAudioChunk(msg.audioBase64);
             break;
 
           case 'student.interruption':

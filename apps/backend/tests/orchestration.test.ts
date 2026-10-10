@@ -80,4 +80,41 @@ describe('Four-Agent Group Discussion Orchestration & Interruption', () => {
     expect(finalSession.status).toBe('completed');
     expect(finalSession.report_status).toBe('fallback'); // deterministic fallback in mock/test mode without API key
   });
+
+  it('buffers student PCM audio chunks and transcribes them when speech completes without browser text', async () => {
+    const { tokenHash } = generateSessionCapability();
+    const session = sessionRepo.createSession(
+      {
+        mode: 'gd',
+        topic: 'AI and Job Automation',
+        durationSeconds: 300,
+        language: 'en-IN',
+        panelSize: 4,
+      },
+      tokenHash
+    );
+
+    const orchestrator = new SessionOrchestrator(session.id, db);
+    await orchestrator.initializeProviders(true);
+    await orchestrator.startSession();
+
+    // Student claims floor
+    await orchestrator.handleStudentSpeechStarted();
+
+    // Send 16kHz PCM audio chunk (1 second of audio)
+    const dummyPcm = Buffer.alloc(16000 * 2, 0x12);
+    orchestrator.handleStudentAudioChunk(dummyPcm.toString('base64'));
+
+    // Student speech stops with empty text (browser STT unavailable or silent)
+    await orchestrator.handleStudentSpeechStopped('');
+
+    // Verify transcript event was created from backend audio transcription fallback
+    const events = eventRepo.getAllEvents(session.id);
+    const audioTranscript = events.find((e) => e.speakerId === 'student' && e.kind === 'transcript');
+    expect(audioTranscript).toBeDefined();
+    expect(audioTranscript?.source).toBe('backend-audio-transcription');
+    expect(audioTranscript?.text).toBeTruthy();
+
+    await orchestrator.endSession('user-ended');
+  });
 });

@@ -10,8 +10,15 @@ export class AudioCapture {
 
   constructor(
     private onChunk: (base64Pcm: string) => void,
-    private onSpeaking?: (speaking: boolean) => void
+    private onSpeaking?: (speaking: boolean) => void,
+    private onLevel?: (level: number) => void
   ) {}
+
+  async resume(): Promise<void> {
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      await this.audioContext.resume();
+    }
+  }
 
   async start(): Promise<void> {
     if (this.isRecording) return;
@@ -28,6 +35,10 @@ export class AudioCapture {
 
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.audioContext = new AudioCtx({ sampleRate: 16000 });
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+      }
+
       this.source = this.audioContext.createMediaStreamSource(this.mediaStream);
 
       // Buffer size 4096 = ~256ms of audio at 16kHz
@@ -44,8 +55,12 @@ export class AudioCapture {
         }
         const rms = Math.sqrt(sumSquares / inputData.length);
         
-        // Voice activity threshold (0.045 filters room noise/hum while detecting clear speech)
-        if (rms > 0.045) {
+        // Report real-time audio energy level (0 - 100)
+        const level = Math.min(100, Math.round(rms * 1500));
+        this.onLevel?.(level);
+
+        // Voice activity threshold (0.008 triggers reliably on normal conversational speech)
+        if (rms > 0.008) {
           this.speakingBlockCount++;
           this.silentBlockCount = 0;
         } else {
@@ -53,11 +68,11 @@ export class AudioCapture {
           this.speakingBlockCount = 0;
         }
 
-        // Debounced speaking transition: require 2 blocks (~500ms) to start, 4 blocks (~1s) to stop
+        // Debounced speaking transition: require 2 blocks (~500ms) to start, 3 blocks (~750ms) to stop
         if (!this.wasSpeaking && this.speakingBlockCount >= 2) {
           this.wasSpeaking = true;
           this.onSpeaking?.(true);
-        } else if (this.wasSpeaking && this.silentBlockCount >= 4) {
+        } else if (this.wasSpeaking && this.silentBlockCount >= 3) {
           this.wasSpeaking = false;
           this.onSpeaking?.(false);
         }

@@ -13,6 +13,7 @@ import {
   User,
   Bot,
   MessageSquare,
+  Check,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { AudioPlayer } from '../audio/audio-player';
@@ -141,6 +142,7 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
   // Audio state
   const [isMicMuted, setIsMicMuted] = useState(false);
   const [isMicSpeaking, setIsMicSpeaking] = useState(false);
+  const [micLevel, setMicLevel] = useState<number>(0);
   const [audioError, setAudioError] = useState<string | null>(null);
 
   // References
@@ -371,6 +373,19 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
     };
   }, [handleStudentInterruption]);
 
+  // Unlock and resume AudioContext on user interaction
+  useEffect(() => {
+    const handleGesture = () => {
+      audioCaptureRef.current?.resume();
+    };
+    window.addEventListener('click', handleGesture);
+    window.addEventListener('keydown', handleGesture);
+    return () => {
+      window.removeEventListener('click', handleGesture);
+      window.removeEventListener('keydown', handleGesture);
+    };
+  }, []);
+
   // End Session Early
   const handleEndSession = async () => {
     const confirmed = window.confirm('Are you sure you want to conclude this session and generate your report?');
@@ -486,6 +501,13 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
           if (activeSpeakerIdRef.current === 'student') {
             ws.send(JSON.stringify({ type: 'student.turn_end' }));
           }
+        }
+      },
+      (level) => {
+        if (!isMicMutedRef.current) {
+          setMicLevel(level);
+        } else {
+          setMicLevel(0);
         }
       }
     );
@@ -707,6 +729,28 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Real-time Mic Signal Meter */}
+              <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                <span className="text-[10px] text-slate-400">Mic Signal:</span>
+                <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-75 ${
+                      isMicMuted
+                        ? 'bg-slate-700'
+                        : micLevel > 40
+                        ? 'bg-amber-400'
+                        : micLevel > 15
+                        ? 'bg-emerald-400'
+                        : 'bg-indigo-500'
+                    }`}
+                    style={{ width: `${isMicMuted ? 0 : Math.min(100, micLevel)}%` }}
+                  />
+                </div>
+                <span className="text-[10px] font-mono text-slate-400 min-w-[28px] text-right">
+                  {isMicMuted ? 'Off' : `${micLevel}%`}
+                </span>
+              </div>
             </div>
 
             {/* AI Participant Cards */}
@@ -888,7 +932,10 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => setIsMicMuted((prev) => !prev)}
+            onClick={() => {
+              setIsMicMuted((prev) => !prev);
+              audioCaptureRef.current?.resume();
+            }}
             className={`p-3 rounded-xl border transition-all flex items-center gap-2 text-xs font-semibold ${
               isMicMuted
                 ? 'bg-red-950/40 border-red-800/60 text-red-300'
@@ -898,14 +945,49 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
             {isMicMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4 text-indigo-400" />}
             <span>{isMicMuted ? 'Mic Muted' : 'Mic Active'}</span>
           </button>
+
+          {/* Quick Floor Action: Speak Now / Pass Floor */}
+          {activeSpeakerId === 'student' ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                  wsRef.current.send(JSON.stringify({ type: 'student.turn_end' }));
+                }
+              }}
+              className="py-2.5 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+            >
+              <Check className="w-4 h-4" />
+              <span>Done Speaking (Pass Floor)</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                handleStudentInterruption();
+                audioCaptureRef.current?.resume();
+              }}
+              className="py-2.5 px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-indigo-500/20"
+            >
+              <Mic className="w-4 h-4" />
+              <span>Speak Now / Claim Floor</span>
+            </button>
+          )}
         </div>
 
-        <div className="text-center hidden sm:block">
-          <p className="text-xs text-slate-400">
-            {sessionStatus === 'report_pending'
-              ? 'Finalizing discussion transcript & evaluating metrics...'
-              : 'Speaking into your mic automatically downsamples to 16kHz PCM'}
-          </p>
+        <div className="text-center hidden sm:flex items-center gap-3">
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <span>Mic Level:</span>
+            <div className="w-24 h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700/60">
+              <div
+                className={`h-full transition-all duration-75 ${
+                  isMicMuted ? 'bg-slate-600' : 'bg-gradient-to-r from-emerald-500 via-teal-400 to-indigo-500'
+                }`}
+                style={{ width: `${isMicMuted ? 0 : Math.min(100, micLevel)}%` }}
+              />
+            </div>
+            <span className="font-mono text-[11px] text-slate-300 min-w-[28px]">{isMicMuted ? 'Off' : `${micLevel}%`}</span>
+          </div>
         </div>
 
         <button
