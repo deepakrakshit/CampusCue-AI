@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+
+# Private runtime session files and logs
+sessions.json
+conversations.json
+*.log
+*.jsonl
+coverage/
+coverage.xml
+*.sqlite
+*.sqlite-*
+*.db
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# IDE and OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

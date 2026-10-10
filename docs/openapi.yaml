@@ -1,0 +1,435 @@
+openapi: 3.1.0
+info:
+  title: Placement Arena API
+  version: 1.0.0-draft
+  description: >-
+    REST contract for the Placement Arena hackathon MVP. See API_CONTRACT.md
+    for the WebSocket protocol and binary audio framing. This spec is a starting
+    contract and must be kept in sync with the implemented service.
+servers:
+  - url: http://localhost:3000
+    description: Local backend
+  - url: https://api.example.invalid
+    description: Replace with deployed backend URL before release
+paths:
+  /health/live:
+    get:
+      operationId: liveHealth
+      summary: Process liveness check
+      security: []
+      responses:
+        '200':
+          description: Process can answer requests
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, const: ok }
+  /health/ready:
+    get:
+      operationId: readyHealth
+      summary: Readiness check for required configuration and storage
+      security: []
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, const: ready }
+                  database: { type: string, enum: [ok, skipped] }
+                  providerConfig: { type: string, enum: [ok, mock, skipped] }
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/sessions:
+    post:
+      operationId: createSession
+      summary: Create a guest GD or interview session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+      responses:
+        '201':
+          description: Session created; access token is returned once
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateSessionResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/sessions/{sessionId}:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      operationId: getSession
+      summary: Get authorized session snapshot
+      security:
+        - SessionCapability: []
+      responses:
+        '200':
+          description: Current session snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: deleteSession
+      summary: Delete an authorized session and its locally stored data
+      security:
+        - SessionCapability: []
+      responses:
+        '204': { description: Deleted }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/sessions/{sessionId}/start:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      operationId: startSession
+      summary: Start a created session
+      security:
+        - SessionCapability: []
+      responses:
+        '200':
+          description: Session state after start (idempotent if already running)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/sessions/{sessionId}/end:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      operationId: endSession
+      summary: Request an orderly session close and report generation
+      security:
+        - SessionCapability: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  enum: [user-ended, deadline, provider-error]
+      responses:
+        '202':
+          description: Closing/finalization accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/sessions/{sessionId}/events:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      operationId: listSessionEvents
+      summary: Fetch canonical events after a known sequence for reconnect
+      security:
+        - SessionCapability: []
+      parameters:
+        - name: afterSequence
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 100
+      responses:
+        '200':
+          description: Ordered session events
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessionId, events, lastSequence, hasMore]
+                properties:
+                  sessionId: { type: string }
+                  events:
+                    type: array
+                    items: { $ref: '#/components/schemas/SessionEvent' }
+                  lastSequence: { type: integer, minimum: 0 }
+                  hasMore: { type: boolean }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/sessions/{sessionId}/report:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      operationId: getReport
+      summary: Get a validated session report
+      security:
+        - SessionCapability: []
+      responses:
+        '200':
+          description: Validated report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '202':
+          description: Report still pending
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, const: pending }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/sessions/{sessionId}/report/retry:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      operationId: retryReport
+      summary: Retry failed evaluation of a finalized transcript
+      security:
+        - SessionCapability: []
+      responses:
+        '202':
+          description: Evaluation retry accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, const: pending }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+components:
+  securitySchemes:
+    SessionCapability:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-session-token
+      description: >-
+        High-entropy guest-session capability returned once by session creation.
+        Never include in a URL. Store in sessionStorage only and hash at rest.
+  parameters:
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 128 }
+  responses:
+    ValidationError:
+      description: Invalid request input
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiErrorEnvelope' }
+    Unauthorized:
+      description: Missing or invalid session capability
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiErrorEnvelope' }
+    NotFound:
+      description: Session/resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiErrorEnvelope' }
+    Conflict:
+      description: Invalid state transition
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiErrorEnvelope' }
+    RateLimited:
+      description: Request rate limited
+      headers:
+        Retry-After:
+          schema: { type: integer, minimum: 1 }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiErrorEnvelope' }
+    ServiceUnavailable:
+      description: Required dependency is not ready
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiErrorEnvelope' }
+  schemas:
+    CreateSessionRequest:
+      oneOf:
+        - $ref: '#/components/schemas/CreateGdSessionRequest'
+        - $ref: '#/components/schemas/CreateInterviewSessionRequest'
+      discriminator:
+        propertyName: mode
+        mapping:
+          gd: '#/components/schemas/CreateGdSessionRequest'
+          interview: '#/components/schemas/CreateInterviewSessionRequest'
+    CreateGdSessionRequest:
+      type: object
+      additionalProperties: false
+      required: [mode, topic, durationSeconds, language, panelSize]
+      properties:
+        mode: { type: string, const: gd }
+        topic: { type: string, minLength: 1, maxLength: 300 }
+        durationSeconds: { type: integer, minimum: 120, maximum: 300, default: 300 }
+        language: { type: string, enum: [en-IN, en-US, hi-IN, hinglish], default: en-IN }
+        panelSize: { type: integer, const: 4, default: 4 }
+        interview: { type: 'null' }
+    CreateInterviewSessionRequest:
+      type: object
+      additionalProperties: false
+      required: [mode, durationSeconds, language, panelSize, interview]
+      properties:
+        mode: { type: string, const: interview }
+        topic: { type: 'null' }
+        durationSeconds: { type: integer, const: 300, default: 300 }
+        language: { type: string, enum: [en-IN, en-US, hi-IN, hinglish], default: en-IN }
+        panelSize: { type: integer, const: 1, default: 1 }
+        interview:
+          type: object
+          additionalProperties: false
+          required: [targetRole]
+          properties:
+            targetRole: { type: string, minLength: 2, maxLength: 120 }
+            seniority: { type: string, maxLength: 80, default: student-entry-level }
+            projectDescription: { type: [string, 'null'], maxLength: 10000 }
+            resumeText: { type: [string, 'null'], maxLength: 20000 }
+            githubUrl: { type: [string, 'null'], format: uri }
+    CreateSessionResponse:
+      type: object
+      required: [session, sessionAccessToken]
+      properties:
+        session:
+          $ref: '#/components/schemas/SessionSnapshot'
+        sessionAccessToken:
+          type: string
+          minLength: 32
+          description: Returned once. Never log or include in URLs.
+    SessionSnapshot:
+      type: object
+      required: [sessionId, mode, status, durationSeconds, sequence, protocolVersion]
+      properties:
+        sessionId: { type: string }
+        mode: { type: string, enum: [gd, interview] }
+        status:
+          type: string
+          enum: [created, preparing, running, closing, report_pending, completed, failed, expired]
+        topic: { type: [string, 'null'] }
+        durationSeconds: { type: integer }
+        startedAt: { type: [string, 'null'], format: date-time }
+        deadlineAt: { type: [string, 'null'], format: date-time }
+        endedAt: { type: [string, 'null'], format: date-time }
+        activeSpeakerId: { type: [string, 'null'] }
+        speakerLock: { type: string, enum: [idle, ai-speaking, student-speaking, closing] }
+        sequence: { type: integer, minimum: 0 }
+        protocolVersion: { type: integer, const: 1 }
+        reportStatus: { type: string, enum: [not_requested, pending, ready, fallback, failed] }
+    SessionEvent:
+      type: object
+      required: [eventId, sequence, kind, speakerId, speakerLabel, createdAt]
+      properties:
+        eventId: { type: string }
+        sequence: { type: integer, minimum: 1 }
+        turnId: { type: [string, 'null'] }
+        kind: { type: string, enum: [transcript, state_change, interruption, moderator, provider_status, system_note] }
+        speakerId: { type: string }
+        speakerLabel: { type: string }
+        text: { type: [string, 'null'] }
+        source: { type: [string, 'null'] }
+        startedAt: { type: [string, 'null'], format: date-time }
+        endedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        metadata: { type: object, additionalProperties: true }
+    Report:
+      type: object
+      required: [reportId, sessionId, status, schemaVersion, rubricVersion, metrics, criteria, overallSummary, overallAdvice]
+      properties:
+        reportId: { type: string }
+        sessionId: { type: string }
+        status: { type: string, enum: [ready, fallback] }
+        schemaVersion: { type: string, const: placement-arena-report.v1 }
+        rubricVersion: { type: string }
+        evaluatorModelId: { type: [string, 'null'] }
+        metrics:
+          type: object
+          additionalProperties:
+            type: [number, integer, string, boolean, 'null']
+        overallSummary: { type: string, maxLength: 3000 }
+        criteria:
+          type: array
+          items:
+            type: object
+            required: [criterionId, score, summary, evidence, suggestions, insufficientEvidence]
+            properties:
+              criterionId: { type: string }
+              score: { type: [integer, 'null'], minimum: 1, maximum: 5 }
+              summary: { type: string, maxLength: 2000 }
+              evidence:
+                type: array
+                items:
+                  type: object
+                  required: [eventId, quote, reasoning]
+                  properties:
+                    eventId: { type: string }
+                    quote: { type: string, maxLength: 1000 }
+                    reasoning: { type: string, maxLength: 2000 }
+              suggestions:
+                type: array
+                maxItems: 5
+                items: { type: string, maxLength: 500 }
+              insufficientEvidence: { type: boolean }
+        overallAdvice:
+          type: array
+          maxItems: 10
+          items: { type: string, maxLength: 500 }
+        limitations:
+          type: array
+          items: { type: string, maxLength: 500 }
+        createdAt: { type: string, format: date-time }
+    ApiErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId, retryable]
+          properties:
+            code: { type: string }
+            message: { type: string, maxLength: 500 }
+            requestId: { type: string }
+            retryable: { type: boolean }
+            retryAfterMs: { type: integer, minimum: 0 }

@@ -1,0 +1,22 @@
+{
+  "name": "campus-cue-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CampusCue AI — Voice-First Group Discussion & Placement Interview Platform",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:backend": "npm --workspace=apps/backend run dev",
+    "dev:frontend": "npm --workspace=apps/frontend run dev",
+    "dev": "npm --workspace=apps/backend run dev",
+    "build": "npm --workspaces run build",
+    "test": "npm --workspaces run test",
+    "test:backend": "npm --workspace=apps/backend run test",
+    "test:frontend": "npm --workspace=apps/frontend run test",
+    "lint": "npm --workspaces run lint"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
