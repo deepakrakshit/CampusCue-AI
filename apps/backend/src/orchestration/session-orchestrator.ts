@@ -330,9 +330,16 @@ export class SessionOrchestrator {
     const provider = this.providers.get(speakerId);
     if (provider) {
       try {
+        const lastEvent = this.eventRepo.getLastEvent(this.sessionId);
+        let contextualGuidance = '';
+        if (lastEvent && lastEvent.text && lastEvent.speakerId !== speakerId) {
+          const speakerName = lastEvent.speakerId === 'student' ? 'the Candidate' : lastEvent.speakerLabel;
+          contextualGuidance = `\nCRITICAL CONTEXT: ${speakerName} just contributed: "${lastEvent.text}". In your opening sentence, you MUST directly address, react to, build upon, or politely challenge ${speakerName}'s point! Never ignore what was just said.`;
+        }
+
         const promptText =
           session.mode === 'gd'
-            ? `You are ${speakerLabel}. Please speak to the group now and share your perspective on the discussion topic: "${session.topic}". Keep your response concise (2-3 sentences).`
+            ? `You are ${speakerLabel}. Discussion topic: "${session.topic}".${contextualGuidance}\nSpeak in natural conversational Hinglish (blend fluent English with natural conversational Hindi words like 'bilkul', 'sahi point hai', 'dekho', 'yaar', 'actually', 'point yeh hai', 'matlab'). Keep your response concise (2-3 sentences max). Address the group now.`
             : `Please ask the candidate your next technical interview question concisely.`;
 
         await provider.sendClientContent(

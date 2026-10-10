@@ -17,6 +17,7 @@ import {
 import { api } from '../api/client';
 import { AudioPlayer } from '../audio/audio-player';
 import { AudioCapture } from '../audio/audio-capture';
+import { SpeechRecognizer } from '../audio/speech-recognizer';
 import type {
   SessionSnapshot,
   SessionEvent,
@@ -152,6 +153,7 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
   const isMicMutedRef = useRef<boolean>(isMicMuted);
   const sessionStatusRef = useRef<SessionStatus>(sessionStatus);
   const activeSpeakerIdRef = useRef<string | null>(activeSpeakerId);
+  const speechRecognizerRef = useRef<SpeechRecognizer | null>(null);
 
   // Synchronize state to refs for non-tearing background loops
   useEffect(() => {
@@ -160,7 +162,14 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
 
   useEffect(() => {
     isMicMutedRef.current = isMicMuted;
-  }, [isMicMuted]);
+    if (speechRecognizerRef.current) {
+      if (isMicMuted) {
+        speechRecognizerRef.current.stop();
+      } else if (sessionStatus === 'running') {
+        speechRecognizerRef.current.start();
+      }
+    }
+  }, [isMicMuted, sessionStatus]);
 
   useEffect(() => {
     sessionStatusRef.current = sessionStatus;
@@ -447,8 +456,53 @@ export const DiscussionRoomView: React.FC<DiscussionRoomViewProps> = ({
       setAudioError(`${msg} (You can use text chat input below as fallback)`);
     });
 
+    // 5. Initialize Live Speech Recognizer for candidate microphone
+    const recognizer = new SpeechRecognizer({
+      onSpeechStart: () => {
+        if (isMicMutedRef.current || sessionStatusRef.current !== 'running') return;
+        setIsMicSpeaking(true);
+        if (activeSpeakerIdRef.current && activeSpeakerIdRef.current !== 'student') {
+          handleStudentInterruption();
+        }
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'student.turn_start' }));
+        }
+      },
+      onSpeechEnd: () => {
+        setIsMicSpeaking(false);
+      },
+      onInterimText: (text) => {
+        if (isMicMutedRef.current || sessionStatusRef.current !== 'running') return;
+        setInterimText({
+          speakerId: 'student',
+          speakerLabel: 'You (Candidate)',
+          text,
+        });
+      },
+      onFinalText: (text) => {
+        if (isMicMutedRef.current || sessionStatusRef.current !== 'running') return;
+        setInterimText(null);
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(
+            JSON.stringify({
+              type: 'transcript.student_text',
+              text,
+            })
+          );
+        }
+      },
+      onError: (err) => {
+        console.warn('Speech recognition notice:', err);
+      },
+    });
+    speechRecognizerRef.current = recognizer;
+    if (recognizer.isSupported() && !isMicMutedRef.current) {
+      recognizer.start();
+    }
+
     return () => {
       clearInterval(pingInterval);
+      recognizer.stop();
       capture.stop();
       player.dispose();
       ws.close();

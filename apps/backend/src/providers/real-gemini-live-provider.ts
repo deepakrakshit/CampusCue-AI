@@ -218,7 +218,7 @@ export class RealGeminiLiveProvider implements LiveProvider {
       this.callbacks.onInterimText?.(this.currentTurnText);
     }
 
-    if (msg.serverContent?.turnComplete) {
+    if (msg.serverContent?.generationComplete || msg.serverContent?.turnComplete) {
       const final = this.currentTurnText.trim();
       this.currentTurnText = '';
       this.callbacks.onFinalText?.(final || '(Spoken contribution)');

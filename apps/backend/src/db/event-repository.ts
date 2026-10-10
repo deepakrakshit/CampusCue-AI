@@ -139,6 +139,18 @@ export class EventRepository {
     return rows.map((r) => this.mapRowToEvent(r));
   }
 
+  getLastEvent(sessionId: string): SessionEvent | null {
+    const stmt = this.db.prepare(`
+      SELECT * FROM session_events
+      WHERE session_id = ? AND text IS NOT NULL AND trim(text) != ''
+      ORDER BY sequence DESC
+      LIMIT 1
+    `);
+    const row = stmt.get(sessionId) as Record<string, unknown> | undefined;
+    if (!row) return null;
+    return this.mapRowToEvent(row);
+  }
+
   private mapRowToEvent(row: Record<string, unknown>): SessionEvent {
     let metadata: Record<string, unknown> = {};
     try {
